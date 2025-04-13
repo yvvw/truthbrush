@@ -23,8 +23,7 @@ logging.basicConfig(
 BASE_URL = "https://truthsocial.com"
 API_BASE_URL = "https://truthsocial.com/api"
 USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 "
-    "Safari/537.36"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/135.0.0.0 Safari/537.36"
 )
 
 # Oauth client credentials, from https://truthsocial.com/packs/js/application-d77ef3e9148ad1d0624c.js
@@ -42,6 +41,8 @@ TRUTHSOCIAL_TOKEN = os.getenv("TRUTHSOCIAL_TOKEN")
 class LoginErrorException(Exception):
     pass
 
+class CloudflareRestrictException(Exception):
+    pass
 
 class Api:
     def __init__(
@@ -102,7 +103,7 @@ class Api:
                 API_BASE_URL + url,
                 params=params,
                 proxies=proxies,
-                impersonate="chrome123",
+                impersonate="chrome",
                 headers={
                     "Authorization": "Bearer " + self.auth_id,
                     "User-Agent": USER_AGENT,
@@ -110,6 +111,7 @@ class Api:
             )
         except curl_cffi.curl.CurlError as e:
             logger.error(f"Curl error: {e}")
+            raise e
 
         # Will also sleep
         self._check_ratelimit(resp)
@@ -117,6 +119,8 @@ class Api:
         try:
             r = resp.json()
         except json.JSONDecodeError:
+            if "Cloudflare" in resp.text:
+                raise CloudflareRestrictException("Cloudflare restrict access")
             logger.error(f"Failed to decode JSON: {resp.text}")
             r = None
 
@@ -393,6 +397,11 @@ class Api:
                 break
             except Exception as e:
                 logger.error(f"Misc. error while pulling statuses for {user_id}: {e}")
+                if isinstance(e, CloudflareRestrictException):
+                    sleep(10)
+                break
+
+            if result is None:
                 break
 
             if "error" in result:
