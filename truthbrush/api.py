@@ -1,3 +1,4 @@
+from json import JSONDecodeError
 from time import sleep
 from typing import Any, Iterator, List, Optional
 from loguru import logger
@@ -42,6 +43,9 @@ class LoginErrorException(Exception):
     pass
 
 class CloudflareRestrictException(Exception):
+    pass
+
+class AreaUnavailableException(Exception):
     pass
 
 class Api:
@@ -121,8 +125,10 @@ class Api:
         except json.JSONDecodeError:
             if "Cloudflare" in resp.text:
                 raise CloudflareRestrictException("Cloudflare restrict access")
+            elif "unavailable-in-your-area" in resp.text:
+                raise AreaUnavailableException("Area unavailable")
             logger.error(f"Failed to decode JSON: {resp.text}")
-            r = None
+            raise JSONDecodeError("Failed to decode JSON")
 
         return r
 
